@@ -62,7 +62,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          repository: alist-dev/desktop
+          repository: AlistGo/desktop
           token: ${{ secrets.MY_TOKEN }}
 
       - name: Install dependencies (ubuntu only)
