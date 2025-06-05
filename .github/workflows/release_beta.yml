@@ -29,7 +29,7 @@ jobs:
         with:
           token: ${{ secrets.MY_TOKEN }} #generate new PAT and give delete access to it
           repo:  desktop-release
-          owner: AlistGo
+          owner: alist-org
           keyword: beta
           deletetype: "release" #tag: will delete tags only; release: will delete releases only; tr: will delete both releases and tags
 
@@ -41,13 +41,16 @@ jobs:
         include:
           - os: macos-latest
             target: x86_64-apple-darwin
+            args:
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
+            args:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             args: --bundles nsis,updater
           - os: macos-latest
             target: aarch64-apple-darwin
+            args:
           - os: windows-latest
             target: aarch64-pc-windows-msvc
             args: --bundles nsis,updater
@@ -59,14 +62,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          repository: AlistGo/desktop
+          repository: alist-dev/desktop
           token: ${{ secrets.MY_TOKEN }}
-
-      - name: Install NSIS (Windows only)
-        if: matrix.os == 'windows-latest'
-        run: |
-          choco install nsis -y
-          makensis -VERSION  # 验证安装情况
 
       - name: Install dependencies (ubuntu only)
         if: matrix.os == 'ubuntu-22.04'
@@ -132,7 +129,7 @@ jobs:
           # tagName: ${{ github.ref_name }} # This only works if your workflow triggers on new tags.
           releaseName: "AList Desktop v__VERSION__" # tauri-action replaces \_\_VERSION\_\_ with the app version.
           releaseBody: "See the assets to download and install this version."
-          args: "--target ${{ matrix.target }} ${{ matrix.args || ''  }} --verbose"
+          args: "--target ${{ matrix.target }} ${{ matrix.args }}"
           prerelease: true
           tagName: beta
 
