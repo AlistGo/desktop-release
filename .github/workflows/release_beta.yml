@@ -62,7 +62,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libayatana-appindicator3-dev librsvg2-dev
-          # sudo apt-get install -y libssl-dev pkg-config gcc-10-aarch64-linux-gnu
 
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
@@ -110,11 +109,24 @@ jobs:
           ALIST_VERSION: beta
           RCLONE_VERSION: ${{ steps.get-rclone-version.outputs.tag_name }}
 
-      - name: Build the app
+      - name: Build & publish (coordinator uploads latest.json)
+        if: matrix.os == 'macos-latest' && matrix.target == 'x86_64-apple-darwin'
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.MY_TOKEN }}
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+        with:
+          releaseName: "AList Desktop v__VERSION__"
+          releaseBody: "See the assets to download and install this version."
+          args: "--target ${{ matrix.target }} ${{ matrix.args }}"
+          prerelease: true
+          tagName: beta
+
+      - name: Build & publish (no updater json)
+        if: ${{ !(matrix.os == 'macos-latest' && matrix.target == 'x86_64-apple-darwin') }}
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.MY_TOKEN }}
         with:
           releaseName: "AList Desktop v__VERSION__"
           releaseBody: "See the assets to download and install this version."
