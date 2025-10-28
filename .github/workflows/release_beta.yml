@@ -12,29 +12,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  delete_old_beta:
+  update_beta_ref:
     runs-on: ubuntu-latest
     if: ${{ github.event_name != 'issue_comment' || (github.event.issue.number == 69 && contains(github.event.comment.body, '/release-beta')) }}
     steps:
-
       - name: Create or update ref
         id: create-or-update-ref
         uses: ovsds/create-or-update-ref-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.MY_TOKEN }}
         with:
-          ref: tags/beta
+          ref: refs/tags/beta
           sha: ${{ github.sha }}
 
-      - name: Execute Delete Release/Tag action
-        uses: ShivamHS/delete-tag@v1
-        with:
-          token: ${{ secrets.MY_TOKEN }} #generate new PAT and give delete access to it
-          repo:  desktop-release
-          owner: alist-org
-          keyword: beta
-          deletetype: "release" #tag: will delete tags only; release: will delete releases only; tr: will delete both releases and tags
-
   release_beta:
-    needs: delete_old_beta
+    needs: update_beta_ref
     strategy:
       fail-fast: false
       matrix:
@@ -67,7 +59,6 @@ jobs:
 
       - name: Install dependencies (ubuntu only)
         if: matrix.os == 'ubuntu-22.04'
-        # You can remove libayatana-appindicator3-dev if you don't use the system tray feature.
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libayatana-appindicator3-dev librsvg2-dev
@@ -92,7 +83,7 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: "lts/*"
-          cache: "pnpm" # Set this to npm, yarn or pnpm.
+          cache: "pnpm"
 
       - name: Install app dependencies and build web
         run: pnpm i
@@ -117,17 +108,15 @@ jobs:
         env:
           TARGET_TRIPLE: ${{ matrix.target }}
           ALIST_VERSION: beta
-          RCLONE_VERSION: ${{ steps.get-rclone-version.outputs.tag_name }} # v1.63.0
+          RCLONE_VERSION: ${{ steps.get-rclone-version.outputs.tag_name }}
 
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.MY_TOKEN }}
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          # PKG_CONFIG_ALLOW_CROSS: ${{ contains(matrix.target, 'aarch64') && '1' || '' }}
         with:
-          # tagName: ${{ github.ref_name }} # This only works if your workflow triggers on new tags.
-          releaseName: "AList Desktop v__VERSION__" # tauri-action replaces \_\_VERSION\_\_ with the app version.
+          releaseName: "AList Desktop v__VERSION__"
           releaseBody: "See the assets to download and install this version."
           args: "--target ${{ matrix.target }} ${{ matrix.args }}"
           prerelease: true
@@ -153,17 +142,19 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: "lts/*"
-          # cache: "pnpm" # Set this to npm, yarn or pnpm.
 
       - name: Generate proxy.json
         run: |
           npx tsx ./proxy.ts
 
-      - name: Upload proxy.json
-        uses: softprops/action-gh-release@v1
+      - name: Upload proxy.json (override existing)
+        uses: softprops/action-gh-release@v2
         with:
-          fail_on_unmatched_files: true
           token: ${{ secrets.MY_TOKEN }}
           tag_name: beta
+          prerelease: true
+          make_latest: false
+          allow_updates: true
+          fail_on_unmatched_files: true
           files: |
             *.proxy.json
