@@ -149,12 +149,14 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.MY_TOKEN }}
+          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
         with:
           releaseName: "AList Desktop v__VERSION__"
           releaseBody: "See the assets to download and install this version."
           args: "--target ${{ matrix.target }} ${{ matrix.args }}"
           prerelease: true
           tagName: beta
+          includeUpdaterJson: false
 
   build_updater:
     name: "Build updater beta"
