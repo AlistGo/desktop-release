@@ -121,9 +121,9 @@ jobs:
             const target = "${{ matrix.target }}";
             const patterns =
               target === "x86_64-apple-darwin"
-                ? [/^alist-desktop_darwin_x64\.app\.tar\.gz$/, /^alist-desktop_darwin_x64\.app\.tar\.gz\.sig$/]
+                ? [/^alist-desktop_x64\.app\.tar\.gz$/, /^alist-desktop_x64\.app\.tar\.gz\.sig$/]
                 : target === "aarch64-apple-darwin"
-                ? [/^alist-desktop_darwin_aarch64\.app\.tar\.gz$/, /^alist-desktop_darwin_aarch64\.app\.tar\.gz\.sig$/]
+                ? [/^alist-desktop_aarch64\.app\.tar\.gz$/, /^alist-desktop_aarch64\.app\.tar\.gz\.sig$/]
                 : [];
             if (patterns.length === 0) return;
             const rel = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
