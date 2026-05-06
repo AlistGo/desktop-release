@@ -97,7 +97,8 @@ jobs:
           ALIST_VERSION: ${{ steps.get-alist-version.outputs.tag_name }} # v3.19.0
           RCLONE_VERSION: ${{ steps.get-rclone-version.outputs.tag_name }} # v1.63.0
 
-      - name: Build the app
+      - name: Build & publish (coordinator uploads latest.json)
+        if: ${{ matrix.os == 'macos-latest' && matrix.target == 'x86_64-apple-darwin' }}
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.MY_TOKEN }}
@@ -107,6 +108,19 @@ jobs:
           releaseName: "AList Desktop v__VERSION__" # tauri-action replaces \_\_VERSION\_\_ with the app version.
           releaseBody: "See the assets to download and install this version."
           args: "--target ${{ matrix.target }} ${{ matrix.args }}"
+
+      - name: Build & publish (no updater json)
+        if: ${{ !(matrix.os == 'macos-latest' && matrix.target == 'x86_64-apple-darwin') }}
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.MY_TOKEN }}
+          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+        with:
+          tagName: ${{ github.ref_name }} # This only works if your workflow triggers on new tags.
+          releaseName: "AList Desktop v__VERSION__" # tauri-action replaces \_\_VERSION\_\_ with the app version.
+          releaseBody: "See the assets to download and install this version."
+          args: "--target ${{ matrix.target }} ${{ matrix.args }}"
+          includeUpdaterJson: false
 
   build_updater:
     name: "Build updater"
