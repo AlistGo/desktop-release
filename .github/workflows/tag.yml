@@ -11,9 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          repository: alist-dev/desktop
+          repository: AlistGo/desktop
           token: ${{ secrets.MY_TOKEN }}
 
       - name: Add tag
@@ -26,4 +26,4 @@ jobs:
         uses: ad-m/github-push-action@master
         with:
           github_token: ${{ secrets.MY_TOKEN }}
-          repository: alist-dev/desktop
+          repository: AlistGo/desktop
