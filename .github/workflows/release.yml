@@ -55,7 +55,7 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v2
         with:
           version: 9
           run_install: false
@@ -131,7 +131,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v2
         with:
           version: 9
           run_install: false
