@@ -57,7 +57,7 @@ export function manifests(tag, records, date = new Date().toISOString()) {
   for (const p of Object.values(proxy.platforms)) p.url = `https://ghfast.top/${p.url}`
   return { latest, proxy }
 }
-const gh = (...args) => execFileSync('gh', args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }).trim()
+const gh = (...args) => execFileSync('gh', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).trim()
 const json = (...args) => JSON.parse(gh(...args))
 const filesIn = dir => readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? filesIn(join(dir, e.name)) : [join(dir, e.name)])
 const save = (path, data) => writeFileSync(path, JSON.stringify(data, null, 2) + '\n')
@@ -76,7 +76,7 @@ function prepare() {
   const rclone = json('api', 'repos/rclone/rclone/releases/latest').tag_name
   if (!/^v3\.\d+\.\d+$/.test(core) || !/^v\d+\.\d+\.\d+$/.test(rclone)) throw new Error('Expected stable sidecars')
   // Never modify a previously published version; retries only operate on its draft.
-  const releases = json('api', '--paginate', '--slurp', `repos/${repo}/releases?per_page=100`, '--jq', 'flatten | map({tag_name,draft,id,prerelease})')
+  const releases = json('api', '--paginate', '--slurp', `repos/${repo}/releases?per_page=100`).flat()
   assertForward(tag, releases.filter(r => !r.draft).map(r => r.tag_name))
   const previous = releases.find(r => r.tag_name === tag)
   if (previous && !previous.draft) throw new Error('Published version is immutable; choose a new beta number')
@@ -133,7 +133,7 @@ function publish() {
   save('ghfast.top.proxy.json', proxy)
   save('provenance.json', plan)
   writeFileSync('SHA256SUMS', records.map(r => `${r.sha256}  ${r.name}`).join('\n') + '\n')
-  const releases = json('api', '--paginate', '--slurp', `repos/${repo}/releases?per_page=100`, '--jq', 'flatten | map({tag_name,draft,id,prerelease})')
+  const releases = json('api', '--paginate', '--slurp', `repos/${repo}/releases?per_page=100`).flat()
   assertForward(plan.tag, releases.filter(r => !r.draft).map(r => r.tag_name))
   let release = releases.find(r => r.tag_name === plan.tag)
   if (release && !release.draft) throw new Error('Published release cannot be replaced')
