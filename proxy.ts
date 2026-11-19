@@ -18,8 +18,9 @@ const repo = process.env.GITHUB_REPOSITORY!;
 
 async function getUpdater() {
   const res = await fetch(
-    `https://github.com/${repo}/releases/latest/download/latest.json`
+    `https://github.com/${repo}/releases/download/${encodeURIComponent(process.env.GITHUB_REF_NAME || "beta")}/latest.json`
   );
+  if (!res.ok) throw new Error(`Updater fetch failed: ${res.status}`);
   const content = await res.json();
   const updater: Updater = content;
   return updater;

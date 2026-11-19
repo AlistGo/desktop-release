@@ -1,10 +1,6 @@
 name: Release Beta
+# Legacy date-version beta is retained for manual maintenance only.
 on:
-  push:
-    branches:
-      - main
-  issue_comment:
-    types: [created]
   workflow_dispatch:
 
 concurrency:
@@ -14,7 +10,6 @@ concurrency:
 jobs:
   update_beta_ref:
     runs-on: ubuntu-latest
-    if: ${{ github.event_name != 'issue_comment' || (github.event.issue.number == 69 && contains(github.event.comment.body, '/release-beta')) }}
     steps:
       - name: Create or update ref
         id: create-or-update-ref
@@ -56,6 +51,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: AlistGo/desktop
+          ref: v2
           token: ${{ secrets.MY_TOKEN }}
 
       - name: Install dependencies (ubuntu only)
@@ -163,8 +159,8 @@ jobs:
 
   build_updater:
     name: "Build updater beta"
-    needs: release_beta
-    environment: ${{ github.event.inputs.environment || 'Beta' }}
+    needs: compose_latest_json
+    environment: Beta
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -185,6 +181,8 @@ jobs:
       - name: Generate proxy.json
         run: |
           npx tsx ./proxy.ts
+        env:
+          GITHUB_REF_NAME: beta
 
       - name: Upload proxy.json
         uses: softprops/action-gh-release@v2
@@ -193,7 +191,7 @@ jobs:
           tag_name: beta
           prerelease: true
           make_latest: false
-          allow_updates: true
+          overwrite_files: true
           fail_on_unmatched_files: true
           files: |
             *.proxy.json

@@ -1,10 +1,172 @@
-name: Debug Run
+name: Desktop 4 Beta draft trial
 on:
   workflow_dispatch:
-
+    inputs:
+      tag:
+        description: 'New version, e.g. v4.0.0-beta.1 (source is pinned from desktop/v3)'
+        required: true
+        type: string
+      source_ref:
+        description: 'Source ref (non-v3 is only allowed in draft-only mode)'
+        default: v3
+        type: string
+      draft_only:
+        description: 'Validate and upload a draft only; do not publish or update beta-v4'
+        default: true
+        type: boolean
+permissions:
+  contents: write
+concurrency:
+  group: desktop-v4-beta-release
+  cancel-in-progress: false
 jobs:
-  test:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      source: ${{ steps.plan.outputs.source }}
+      core: ${{ steps.plan.outputs.core }}
+      rclone: ${{ steps.plan.outputs.rclone }}
+      tag: ${{ steps.plan.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test scripts/v4-release.test.mjs
+      - id: plan
+        run: node scripts/v4-release.mjs prepare
+        env:
+          GH_TOKEN: ${{ secrets.MY_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          SOURCE_REF: ${{ inputs.source_ref || 'v3' }}
+          DRAFT_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.draft_only && 'true' || 'false' }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-plan
+          path: plan.json
+          if-no-files-found: error
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            bundles: app,dmg
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            bundles: app,dmg
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            bundles: deb,appimage
+          - os: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+            bundles: deb,appimage
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundles: nsis,msi
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            bundles: nsis
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      GITHUB_TOKEN: ${{ secrets.MY_TOKEN }}
+      NODE_AUTH_TOKEN: ${{ secrets.MY_TOKEN }}
+      TARGET_TRIPLE: ${{ matrix.target }}
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      EXPECTED_SOURCE: ${{ needs.prepare.outputs.source }}
+      AD_VERSION: ${{ needs.prepare.outputs.tag }}
+      ALIST_VERSION: ${{ needs.prepare.outputs.core }}
+      RCLONE_VERSION: ${{ needs.prepare.outputs.rclone }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: pipeline
+      - uses: actions/checkout@v4
+        with:
+          repository: AlistGo/desktop
+          ref: ${{ needs.prepare.outputs.source }}
+          token: ${{ secrets.MY_TOKEN }}
+          path: source
+      - name: Linux dependencies (Tauri 2)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: source/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: source/src-tauri -> target
+      - name: Prepare pinned source and sidecars
+        working-directory: source
+        run: |
+          pnpm install --frozen-lockfile
+          node scripts/version.mjs
+          pnpm fetch-core
+          pnpm fetch-rclone
+          pnpm test
+          pnpm build
+      - name: Signed release build
+        working-directory: source
+        run: pnpm tauri build --target "$TARGET_TRIPLE" --bundles '${{ matrix.bundles }}'
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY || secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      - name: Collect bundles and checksums
+        working-directory: source
+        run: node ../pipeline/scripts/v4-release.mjs collect
+        env:
+          BUNDLE_DIR: src-tauri/target/${{ matrix.target }}/release/bundle
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundles-${{ matrix.target }}
+          path: source/release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+  publish:
+    needs: [prepare, build]
     runs-on: ubuntu-latest
     steps:
-      - name: Show basic message
-        run: echo "Hello World, this workflow is working!"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-plan
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bundles-*
+          path: artifacts
+          merge-multiple: true
+      - run: sudo apt-get update && sudo apt-get install -y minisign
+      - name: Verify all platforms, publish version, advance Beta channel
+        run: node scripts/v4-release.mjs publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verification-report
+          path: |
+            plan.json
+            latest.json
+            ghfast.top.proxy.json
+            provenance.json
+            SHA256SUMS
+            verified.json
+          if-no-files-found: warn
