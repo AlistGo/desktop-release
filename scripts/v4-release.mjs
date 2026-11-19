@@ -138,8 +138,11 @@ function publish() {
   let release = releases.find(r => r.tag_name === plan.tag)
   if (release && !release.draft) throw new Error('Published release cannot be replaced')
   if (!release) {
-    gh('release', 'create', plan.tag, '--repo', repo, '--target', plan.releaseCommit, '--draft', '--prerelease', '--title', `AList Desktop ${plan.tag}`, '--notes', `Source: AlistGo/desktop@${plan.source}\nCore: ${plan.core}\nRclone: ${plan.rclone}`)
-    release = json('api', `repos/${repo}/releases/tags/${plan.tag}`)
+    release = json('api', '--method', 'POST', `repos/${repo}/releases`,
+      '-f', `tag_name=${plan.tag}`, '-f', `target_commitish=${plan.releaseCommit}`,
+      '-F', 'draft=true', '-F', 'prerelease=true', '-f', 'make_latest=false',
+      '-f', `name=AList Desktop ${plan.tag}`,
+      '-f', `body=Source: AlistGo/desktop@${plan.source}\nCore: ${plan.core}\nRclone: ${plan.rclone}`)
   }
   const uploads = [...filesIn('artifacts').filter(p => !p.endsWith('.json')), 'latest.json', 'ghfast.top.proxy.json', 'provenance.json', 'SHA256SUMS']
   gh('release', 'upload', plan.tag, '--repo', repo, '--clobber', ...uploads)

@@ -65,7 +65,8 @@ if (args[0] === 'api') {
   if (args.some(a => a.includes('/assets?'))) {
     const paths = fs.readdirSync('artifacts').filter(p => !p.endsWith('.json')).map(p=>'artifacts/'+p).concat(['latest.json','ghfast.top.proxy.json','provenance.json','SHA256SUMS']);
     console.log(JSON.stringify([paths.map(p=>{const b=fs.readFileSync(p); return {name:p.split('/').pop(),size:b.length,digest:'sha256:'+crypto.createHash('sha256').update(b).digest('hex')}})]));
-  } else if (args.some(a=>a.includes('/releases/tags/'))) console.log(JSON.stringify({id:123,draft:true}));
+  } else if (args.includes('POST')) console.log(JSON.stringify({id:123,draft:true}));
+  else if (args.some(a=>a.includes('/releases/tags/'))) process.exit(1);
   else console.log('[[]]');
 }
 `
@@ -74,7 +75,7 @@ if (args[0] === 'api') {
     const result = spawnSync(process.execPath, [fileURLToPath(new URL('./v4-release.mjs', import.meta.url)), 'publish'], { cwd: dir, env: { ...process.env, PATH: join(dir, 'bin') + delimiter + process.env.PATH }, encoding: 'utf8' })
     assert.equal(result.status, 0, result.stderr)
     const calls = readFileSync(join(dir, 'calls.jsonl'), 'utf8').trim().split('\n').map(JSON.parse)
-    assert.ok(calls.some(a => a[0] === 'release' && a[1] === 'create' && a.includes('--draft')))
+    assert.ok(calls.some(a => a[0] === 'api' && a.includes('POST') && a.includes('draft=true')))
     assert.ok(calls.some(a => a[0] === 'release' && a[1] === 'upload'))
     assert.ok(!calls.some(a => a.includes('edit') || a.includes('beta-v4')))
     assert.equal(JSON.parse(readFileSync(join(dir, 'verified.json'), 'utf8')).draftOnly, true)
