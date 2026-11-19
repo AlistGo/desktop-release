@@ -33,3 +33,50 @@ test('channel cannot move backward, including beta.10 vs beta.2', () => {
   assert.throws(() => assertForward('v4.0.0-beta.2', ['v4.0.0-beta.2']))
   assertForward('v4.1.0-beta.1', ['v4.0.0-beta.100'])
 })
+
+// Offline integration: fake API/signer isolate publication control flow from credentials/network.
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, delimiter } from 'node:path'
+import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { fileURLToPath } from 'node:url'
+
+test('draft-only verifies uploads but never publishes or writes beta-v4', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'desktop-release-draft-test-'))
+  try {
+    mkdirSync(join(dir, 'artifacts'))
+    mkdirSync(join(dir, 'bin'))
+    const source = 'a'.repeat(40)
+    writeFileSync(join(dir, 'plan.json'), JSON.stringify({ tag, source, draftOnly: true, releaseCommit: 'b'.repeat(40) }))
+    for (const target of Object.keys(targets)) {
+      const rows = fixture().filter(r => r.target === target).map(r => {
+        const bytes = Buffer.from(r.name)
+        writeFileSync(join(dir, 'artifacts', r.name), bytes)
+        return { ...r, source, size: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }
+      })
+      writeFileSync(join(dir, 'artifacts', `${target}.json`), JSON.stringify(rows))
+    }
+    const stub = `#!${process.execPath}
+const fs = require('node:fs'), crypto = require('node:crypto');
+const args = process.argv.slice(2);
+fs.appendFileSync('calls.jsonl', JSON.stringify(args)+'\\n');
+if (args[0] === 'api') {
+  if (args.some(a => a.includes('/assets?'))) {
+    const paths = fs.readdirSync('artifacts').filter(p => !p.endsWith('.json')).map(p=>'artifacts/'+p).concat(['latest.json','ghfast.top.proxy.json','provenance.json','SHA256SUMS']);
+    console.log(JSON.stringify([paths.map(p=>{const b=fs.readFileSync(p); return {name:p.split('/').pop(),size:b.length,digest:'sha256:'+crypto.createHash('sha256').update(b).digest('hex')}})]));
+  } else if (args.some(a=>a.includes('/releases/tags/'))) console.log(JSON.stringify({id:123,draft:true}));
+  else console.log('[[]]');
+}
+`
+    writeFileSync(join(dir, 'bin', 'gh'), stub, { mode: 0o755 })
+    writeFileSync(join(dir, 'bin', 'minisign'), `#!${process.execPath}\nprocess.exit(0)\n`, { mode: 0o755 })
+    const result = spawnSync(process.execPath, [fileURLToPath(new URL('./v4-release.mjs', import.meta.url)), 'publish'], { cwd: dir, env: { ...process.env, PATH: join(dir, 'bin') + delimiter + process.env.PATH }, encoding: 'utf8' })
+    assert.equal(result.status, 0, result.stderr)
+    const calls = readFileSync(join(dir, 'calls.jsonl'), 'utf8').trim().split('\n').map(JSON.parse)
+    assert.ok(calls.some(a => a[0] === 'release' && a[1] === 'create' && a.includes('--draft')))
+    assert.ok(calls.some(a => a[0] === 'release' && a[1] === 'upload'))
+    assert.ok(!calls.some(a => a.includes('edit') || a.includes('beta-v4')))
+    assert.equal(JSON.parse(readFileSync(join(dir, 'verified.json'), 'utf8')).draftOnly, true)
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})

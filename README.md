@@ -11,8 +11,10 @@ The historical date-version Beta workflow is manual only. It no longer runs when
 ## Publishing a 4.x Beta
 
 1. Review and push the desktop source changes to `AlistGo/desktop` branch `v3`. Local uncommitted changes are not used by CI.
-2. Merge this repository's workflow/scripts. Configure `MY_TOKEN` with read access to the private source and its npm packages. Configure `TAURI_SIGNING_PRIVATE_KEY` and optional `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, matching the existing updater public key. Keep legacy `TAURI_PRIVATE_KEY` for the 3.x workflow. Do not embed GitHub tokens in the app.
+2. Merge this repository's workflow/scripts. Configure `MY_TOKEN` with read access to the private source and its npm packages. Configure `TAURI_SIGNING_PRIVATE_KEY` (or reuse the existing `TAURI_PRIVATE_KEY` through the compatibility mapping) and optional `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, matching the existing updater public key. Keep legacy `TAURI_PRIVATE_KEY` for the 3.x workflow. Do not embed GitHub tokens in the app.
 3. Push a new version tag such as `v4.0.0-beta.1` on the release repository, or manually run **Release Desktop 4 Beta** with that tag as input. Use a higher beta number for every published build. The exact `v3` source SHA, stable core version and stable rclone version are resolved once at preparation; all six jobs use those values.
+Manual runs default to `draft_only=true`: all builds, signature checks and draft asset/digest checks run, then stop before public publication or any `beta-v4` change. For a production manual publication explicitly set it to false. Alternate `source_ref` values are permitted only in draft mode; production always resolves `v3`.
+
 4. All platform builds must finish. Missing installers, updater signatures, architectures, mismatched versions, invalid signatures, or remote asset digest mismatches stop publication. Artifacts are first staged in Actions, then uploaded to a draft release. Only after validation is the version release published as prerelease with `make_latest=false`.
 5. The final step advances `beta-v4` manifests. Those manifests reference the immutable versioned release assets, never files in the channel alias. `provenance.json` records the source SHA, dependency versions and release-workflow commit; `SHA256SUMS` lists bundle hashes.
 
