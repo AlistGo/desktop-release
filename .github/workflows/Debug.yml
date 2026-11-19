@@ -47,6 +47,8 @@ jobs:
           const plan = JSON.parse(readFileSync('plan.json', 'utf8'))
           const run = JSON.parse(execFileSync('gh', ['api', `repos/AlistGo/desktop-release/actions/runs/${id}`], { encoding: 'utf8' }))
           if (plan.draftOnly !== true || plan.tag !== 'v4.0.0-beta.1' || plan.source !== 'd8ea3cea0778d1351481caeccc4c2eb5852aa55a' || plan.releaseCommit !== run.head_sha || run.status !== 'completed') throw new Error('Wrong source run or unsafe plan')
+          plan.buildWorkflowCommit = plan.releaseCommit
+          plan.releaseCommit = process.env.GITHUB_SHA
           plan.verificationCommit = process.env.GITHUB_SHA
           plan.buildRun = id
           writeFileSync('plan.json', JSON.stringify(plan, null, 2) + '\n')
